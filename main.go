@@ -34,6 +34,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	
+	// Create MongoDB client
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// Connect to MongoDB server
+	err = client.Connect(context.Background())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 
 	router := mux.NewRouter()
 
@@ -48,9 +62,13 @@ func main() {
 	router.HandleFunc("/schedule", createSchedule).Methods("POST")
 	router.HandleFunc("/schedule/{id}", updateSchedule).Methods("PUT")
 	router.HandleFunc("/schedule/{id}", deleteSchedule).Methods("DELETE")
+	router.HandleFunc("/api/upload", handleFileUpload).Methods("POST")
+	router.HandleFunc("/api/download/{id}", handleFileDownload).Methods("GET")
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./build/")))
+	
 
-	log.Println("Server started on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Println("Server started on port 8081")
+	log.Fatal(http.ListenAndServe(":8081	", router))
 }
 
 func getMembers(w http.ResponseWriter, r *http.Request) {
@@ -448,5 +466,84 @@ func updateSchedule(w http.ResponseWriter, r *http.Request) {
 	// Return the number of updated schedules
 	json.NewEncoder(w).Encode(result.ModifiedCount)
 }
+
+func handleFileUpload(w http.ResponseWriter, r *http.Request) {
+	// Read file from request
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Read file bytes
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Generate file ID
+	fileID := uuid.New().String()
+
+	// Save file to disk
+	err = os.MkdirAll("uploads", os.ModePerm)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fileLocation := filepath.Join("uploads", fileID+filepath.Ext(handler.Filename))
+	err = ioutil.WriteFile(fileLocation, fileBytes, os.ModePerm)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	collection := client.Database("fitnesscenter").Collection("files")
+	_, err = collection.InsertOne(context.Background(), bson.M{
+		"id":       fileID,
+		"name":     handler.Filename,
+		"location": fileLocation,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return file ID to client
+	w.Write([]byte(fileID))
+}
+func handleFileDownload(w http.ResponseWriter, r *http.Request) {
+	// Get file ID from URL
+	vars := mux.Vars(r)
+	fileID := vars["id"]
+
+	// Find file metadata in MongoDB
+	var result File
+	collection := client.Database("fitnesscenter").Collection("files")
+	err := collection.FindOne(context.Background(), bson.M{"id": fileID}).Decode(&result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.Name))
+
+	// Open file on disk and stream its contents to the response
+	file, err := os.Open(result.Location)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+	_, err = io.Copy(w, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 
 //criteria
