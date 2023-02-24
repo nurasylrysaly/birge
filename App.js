@@ -8,6 +8,7 @@ import MemberDetailsDelete from './components/MemberDetailsDelete';
 import SignupForm from './components/SignupForm';
 import Login from './components/Login';
 import ScheduleForm from './components/ScheduleForm';
+import UploadFile from './components/UploadFile';
 import Navbar from './components/Navbar';
 import ContentImg from './img/notebook.png'
 import MainImg from './img/back-img.png'
@@ -61,7 +62,7 @@ function App(){
       <Navbar />
 
       <div className="main-content">
-        <img className="mainImg" src={MainImg}/>
+        <img className="mainImg" src={MainImg} alt="main"/>
         <h2 >The new 1GE fitness center is located in Astana. The futuristic two-story space of 5,000 square meters will amaze you with its beauty and scale, and the variety of training and sports classes will impress even the most sophisticated fitness fan.
 
 Those who prefer the company will like group trainings and balance studio with the most fashionable and effective workouts, those who like solitude will enjoy personal trainings with the best trainers in the city. For strength training there is a huge gym with the latest equipment. After your workout you can relax in the luxurious thermal complex or sit with your favorite book on a lounger by the pool.</h2>
@@ -134,6 +135,11 @@ Those who prefer the company will like group trainings and balance studio with t
 
       
       <ScheduleForm onCreateSchedule={handleCreateSchedule} />
+
+      <UploadFile />
+
+      
+
     </div>
   );
 }
